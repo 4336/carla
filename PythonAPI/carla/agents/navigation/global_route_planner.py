@@ -38,15 +38,22 @@ class GlobalRoutePlanner(object):
         self._find_loose_ends()
         self._lane_change_link()
 
-    def trace_route(self, origin, destination):
+    def trace_route(self, origin, destination, origin_heading = None, destination_heading = None):
         """
         This method returns list of (carla.Waypoint, RoadOption)
         from origin to destination
         """
+        # route_trace = []
+        # route = self._path_search(origin, destination)
+        # current_waypoint = self._wmap.get_waypoint(origin)
+        # destination_waypoint = self._wmap.get_waypoint(destination)        route_trace = []
+        
         route_trace = []
-        route = self._path_search(origin, destination)
-        current_waypoint = self._wmap.get_waypoint(origin)
-        destination_waypoint = self._wmap.get_waypoint(destination)
+        current_point = self._wmap.get_waypoint_with_heading(origin, origin_heading)
+        destination_point = self._wmap.get_waypoint_with_heading(destination, destination_heading)
+        route = self._path_search(current_point.transform.location, destination_point.transform.location)
+        current_waypoint = self._wmap.get_waypoint(current_point.transform.location)
+        destination_waypoint = self._wmap.get_waypoint(destination_point.transform.location)
 
         for i in range(len(route) - 1):
             road_option = self._turn_decision(i, route)

@@ -200,6 +200,83 @@ namespace road {
     }
   }
 
+  // Rtree::TreeElement <BPoint, <Waypoint, Waypoint>>
+  boost::optional<Waypoint> Map::GetClosestWaypointOnRoadWithHeading(
+      const geom::Location &pos,
+      float heading,
+      int32_t lane_type) const {
+    std::vector<Rtree::TreeElement> query_result =
+        _rtree.GetNearestNeighboursWithFilter(Rtree::BPoint(pos.x, pos.y, pos.z),
+        [&](Rtree::TreeElement const &element) {
+          const Lane &lane = GetLane(element.second.first); // GetLane([Waypoint])
+          bool original = (lane_type & static_cast<int32_t>(lane.GetType())) > 0;
+          
+          float heading_threshold = 60; //deg
+          geom::Transform transform;
+          transform = GetLane(element.second.first).ComputeTransform(element.second.first.s);
+          float heading_error = transform.rotation.yaw - heading;
+
+          if(heading_error > 180.f) heading_error -= 360.f;
+          if(heading_error <-180.f) heading_error += 360.f;
+          bool additional = std::abs(heading_error) < heading_threshold;
+          
+          // if(std::sqrt(std::pow(pos.x-transform.location.x,2)+std::pow(pos.y-transform.location.y,2))<10)
+          //   std::cout<<"around 10m\n";
+          // std::cout<<"original: "<<original<<" additional: "<<additional<<std::endl;
+          // std::cout<<"pos: "<<pos.x<<" "<<pos.y<<std::endl;
+          // std::cout<<"pos: "<<transform.location.x<<" "<<transform.location.y<<std::endl;
+          // std::cout<<"heading: "<<heading<<" "<<transform.rotation.yaw<<std::endl;
+          // std::cout<<std::abs(heading_error)<<std::endl;
+
+          return original && additional;
+        });
+
+    if (query_result.size() == 0) {
+      return boost::optional<Waypoint>{};
+    }
+
+    Waypoint target_waypoint;
+
+    Rtree::BSegment segment = query_result.front().first;
+    Rtree::BPoint s1 = segment.first;
+    Rtree::BPoint s2 = segment.second;
+    auto distance_to_segment = geom::Math::DistanceSegmentToPoint(pos,
+        geom::Vector3D(s1.get<0>(), s1.get<1>(), s1.get<2>()),
+        geom::Vector3D(s2.get<0>(), s2.get<1>(), s2.get<2>()));
+
+    Waypoint result_start = query_result.front().second.first;
+    Waypoint result_end = query_result.front().second.second;
+
+    if (result_start.lane_id < 0) {
+      double delta_s = distance_to_segment.first;
+      double final_s = result_start.s + delta_s;
+      if (final_s >= result_end.s) {
+        target_waypoint = result_end;
+      } else if (delta_s <= 0) {
+        target_waypoint = result_start;
+      } else {
+        target_waypoint = GetNext(result_start, delta_s).front();
+      }
+    } else {
+      double delta_s = distance_to_segment.first;
+      double final_s = result_start.s - delta_s;
+      if (final_s <= result_end.s) {
+        target_waypoint = result_end;
+      } else if (delta_s <= 0) {
+        target_waypoint = result_start;
+      } else {
+        target_waypoint = GetNext(result_start, delta_s).front();
+      }
+    }
+
+    geom::Transform transform;
+    transform = GetLane(target_waypoint).ComputeTransform(target_waypoint.s);
+    std::cout<<"input: "<<pos.x<<", "<<pos.y<<std::endl;
+    std::cout<<"ouput: "<<transform.location.x<<", "<<transform.location.y<<std::endl;
+    
+    return boost::optional<Waypoint>{target_waypoint};
+  }
+
   boost::optional<Waypoint> Map::GetWaypoint(
       const geom::Location &pos,
       int32_t lane_type) const {

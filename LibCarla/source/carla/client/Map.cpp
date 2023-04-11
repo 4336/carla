@@ -56,6 +56,17 @@ namespace client {
     nullptr;
   }
 
+  SharedPtr<Waypoint> Map::GetWaypointWithHeading(
+  const geom::Location &location,
+  float heading,
+  int32_t lane_type) const {
+    boost::optional<road::element::Waypoint> waypoint;
+    waypoint = _map.GetClosestWaypointOnRoadWithHeading(location, heading, lane_type);
+    return waypoint.has_value() ?
+    SharedPtr<Waypoint>(new Waypoint{shared_from_this(), *waypoint}) :
+    nullptr;
+  }
+
   SharedPtr<Waypoint> Map::GetWaypointXODR(
       carla::road::RoadId road_id,
       carla::road::LaneId lane_id,
